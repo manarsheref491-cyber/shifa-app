@@ -3,3 +3,8 @@ geopy
 streamlit-folium
 streamlit-js-eval
 folium
+openai
+firebase-admin
+stripe
+gtts
+requests
