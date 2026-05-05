@@ -1,103 +1,566 @@
+
 import streamlit as st
+import json, os, tempfile
 from geopy.distance import geodesic
 from streamlit_folium import st_folium
 from streamlit_js_eval import get_geolocation
 import folium
+from openai import OpenAI
+import firebase_admin
+from firebase_admin import credentials, firestore
+import stripe
+from gtts import gTTS
 
-st.set_page_config(page_title="Shifa Pro", layout="wide")
+st.set_page_config(page_title="Shifa Pro Max", layout="wide")
 
-# ---------- Login ----------
-USERS = {"admin": "1234", "manar": "1111"}
+# ---------- API ----------
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+stripe.api_key = st.secrets["STRIPE_SECRET_KEY"]
 
-if "logged" not in st.session_state:
-    st.session_state.logged = False
+# ---------- Firebase ----------
+if not firebase_admin._apps:
+    cred = credentials.Certificate(json.loads(st.secrets["FIREBASE_CRED"]))
+    firebase_admin.initialize_app(cred)
+db = firestore.client()
 
-if not st.session_state.logged:
+# ---------- STYLE ----------
+st.markdown("""
+<style>
+html, body {background:#0e1117; color:white;}
+section[data-testid="stSidebar"] {background:#111827;}
+.metric {background:#1f2937; padding:15px; border-radius:12px; text-align:center;}
+.chat-user {background:#2563eb; padding:10px; border-radius:10px; margin:5px;}
+.chat-bot {background:#1f2937; padding:10px; border-radius:10px; margin:5px;}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------- LOGIN ----------
+USERS = {"manar":"1111","admin":"1234"}
+if "login" not in st.session_state:
+    st.session_state.login=False
+
+if not st.session_state.login:
     st.title("🔐 Login")
-
-    u = st.text_input("Username")
-    p = st.text_input("Password", type="password")
+    u=st.text_input("Username")
+    p=st.text_input("Password", type="password")
 
     if st.button("Login"):
-        if u in USERS and USERS[u] == p:
-            st.session_state.logged = True
-            st.success("تم تسجيل الدخول")
+        if u in USERS and USERS[u]==p:
+            st.session_state.login=True
             st.rerun()
         else:
-            st.error("❌ بيانات غلط")
-
+            st.error("❌ غلط")
     st.stop()
 
-# ---------- Sidebar ----------
-st.sidebar.title("🚀 Shifa Pro")
-page = st.sidebar.radio("Menu", ["Dashboard", "Chat AI", "Hospitals"])
+# ---------- SIDEBAR ----------
+st.sidebar.title("🚀 Shifa Pro Max")
+menu = st.sidebar.radio("Menu",[
+    "Dashboard","Doctors","Add Doctor","Bookings",
+    "AI Doctor","Voice AI","Hospitals","Payment","Settings"
+])
 
-# ---------- Dashboard ----------
-if page == "Dashboard":
+# ---------- DASHBOARD ----------
+if menu=="Dashboard":
     st.title("📊 Dashboard")
-    st.success("أهلا بيكي 👑")
+    bookings = list(db.collection("bookings").stream())
+    st.metric("عدد الحجوزات", len(bookings))
 
-# ---------- Chat ----------
-elif page == "Chat AI":
-    st.title("🤖 AI Doctor")
+# ---------- ADD DOCTOR ----------
+elif menu=="Add Doctor":
+    st.title("➕ إضافة دكتور")
 
-    if "msgs" not in st.session_state:
-        st.session_state.msgs = []
+    name=st.text_input("اسم الدكتور")
+    spec=st.text_input("التخصص")
+    loc=st.text_input("المكان")
+    phone=st.text_input("الهاتف")
 
-    for m in st.session_state.msgs:
-        st.write(m)
+    times=st.multiselect("المواعيد",["10","12","2","4","6"])
 
-    txt = st.text_input("اكتب حالتك")
+    if st.button("إضافة"):
+        db.collection("doctors").add({
+            "name":name,
+            "specialty":spec,
+            "location":loc,
+            "phone":phone,
+            "rating":0,
+            "times":times
+        })
+        st.success("تم")
+
+# ---------- DOCTORS ----------
+elif menu=="Doctors":
+    st.title("👨‍⚕️ الدكاترة")
+
+    docs=db.collection("doctors").stream()
+
+    for doc in docs:
+        d=doc.to_dict()
+        doc_id=doc.id
+
+        st.write(d["name"],"⭐",d.get("rating",0))
+
+        if d.get("times"):
+            t=st.selectbox("ميعاد",d["times"],key=doc_id)
+
+            if st.button("احجز",key="b"+doc_id):
+                db.collection("bookings").add({
+                    "doctor":d["name"],
+                    "time":t
+                })
+                st.success("تم الحجز")
+
+        r=st.slider("قيم",1,5,key="r"+doc_id)
+        if st.button("تقييم",key="rt"+doc_id):
+            new=(d.get("rating",0)+r)/2
+            db.collection("doctors").document(doc_id).update({"rating":new})
+
+        st.markdown("---")
+
+# ---------- BOOKINGS ----------
+elif menu=="Bookings":
+    st.title("📋 الحجوزات")
+    data=db.collection("bookings").stream()
+    for d in data:
+        st.write(d.to_dict())
+
+# ---------- AI ----------
+elif menu=="AI Doctor":
+    st.title("🤖 AI")
+
+    q=st.text_input("اكتب سؤالك")
 
     if st.button("Send"):
-        if txt:
-            if "صداع" in txt:
-                reply = "💊 إجهاد أو قلة نوم"
-            elif "برد" in txt:
-                reply = "🤧 نزلة برد"
-            else:
-                reply = "👨‍⚕️ استشير دكتور"
+        res=client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role":"user","content":q}]
+        )
+        st.success(res.choices[0].message.content)
 
-            st.session_state.msgs.append("👤 " + txt)
-            st.session_state.msgs.append("🤖 " + reply)
+# ---------- VOICE ----------
+elif menu=="Voice AI":
+    st.title("🎤 Voice")
 
-# ---------- Hospitals + Map ----------
-elif page == "Hospitals":
-    st.title("🏥 أقرب مستشفى (خريطة حقيقية)")
+    txt=st.text_input("نص")
 
-    loc = get_geolocation()
+    if st.button("تشغيل"):
+        tts=gTTS(txt,lang='ar')
+        with tempfile.NamedTemporaryFile(delete=False,suffix=".mp3") as f:
+            tts.save(f.name)
+            st.audio(f.name)
+
+# ---------- MAP ----------
+elif menu=="Hospitals":
+    st.title("🗺️ مستشفيات")
+
+    loc=get_geolocation()
 
     if loc:
-        user_lat = loc["coords"]["latitude"]
-        user_lon = loc["coords"]["longitude"]
+        lat=loc["coords"]["latitude"]
+        lon=loc["coords"]["longitude"]
 
-        st.success("📍 تم تحديد موقعك")
+        m=folium.Map(location=[lat,lon],zoom_start=13)
+        folium.Marker([lat,lon]).add_to(m)
 
-        hospitals = [
-            {"name": "Cairo Hospital", "lat": 30.0500, "lon": 31.2333},
-            {"name": "Nile Clinic", "lat": 30.0300, "lon": 31.2400},
-            {"name": "Health Center", "lat": 30.0600, "lon": 31.2200},
-        ]
+        st_folium(m)
 
-        nearest = None
-        min_dist = 999
+# ---------- PAYMENT ----------
+elif menu=="Payment":
+    st.title("💳 دفع")
 
-        for h in hospitals:
-            dist = geodesic((user_lat, user_lon), (h["lat"], h["lon"])).km
-            if dist < min_dist:
-                min_dist = dist
-                nearest = h
+    if st.button("ادفع"):
+        session=stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data":{
+                    "currency":"usd",
+                    "product_data":{"name":"service"},
+                    "unit_amount":1000
+                },
+                "quantity":1
+            }],
+            mode="payment",
+            success_url="https://success.com",
+            cancel_url="https://cancel.com"
+        )
+        st.write(session.url)
 
-        st.write(f"🏥 أقرب مستشفى: {nearest['name']}")
-        st.write(f"📏 المسافة: {round(min_dist,2)} كم")
+# ---------- SETTINGS ----------
+elif menu=="Settings":
+    st.title("⚙️ Settings")
+    st.write("جاهز")
+import json, os, tempfile
+from geopy.distance import geodesic
+from streamlit_folium import st_folium
+from streamlit_js_eval import get_geolocation
+import folium
+from openai import OpenAI
+import firebase_admin
+from firebase_admin import credentials, firestore
+import stripe
+from gtts import gTTS
 
-        # 🗺️ خريطة
-        m = folium.Map(location=[user_lat, user_lon], zoom_start=13)
+st.set_page_config(page_title="Shifa Pro Max", layout="wide")
 
-        folium.Marker([user_lat, user_lon], tooltip="You", icon=folium.Icon(color="blue")).add_to(m)
-        folium.Marker([nearest["lat"], nearest["lon"]], tooltip=nearest["name"], icon=folium.Icon(color="red")).add_to(m)
+# ---------- API ----------
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+stripe.api_key = st.secrets["STRIPE_SECRET_KEY"]
 
-        st_folium(m, width=700)
+# ---------- Firebase ----------
+if not firebase_admin._apps:
+    cred = credentials.Certificate(json.loads(st.secrets["FIREBASE_CRED"]))
+    firebase_admin.initialize_app(cred)
+db = firestore.client()
 
-    else:
-        st.warning("اضغطي Allow عشان نحدد موقعك")
+# ---------- STYLE ----------
+st.markdown("""
+<style>
+html, body {background:#0e1117; color:white;}
+section[data-testid="stSidebar"] {background:#111827;}
+.metric {background:#1f2937; padding:15px; border-radius:12px; text-align:center;}
+.chat-user {background:#2563eb; padding:10px; border-radius:10px; margin:5px;}
+.chat-bot {background:#1f2937; padding:10px; border-radius:10px; margin:5px;}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------- LOGIN ----------
+USERS = {"manar":"1111","admin":"1234"}
+if "login" not in st.session_state:
+    st.session_state.login=False
+
+if not st.session_state.login:
+    st.title("🔐 Login")
+    u=st.text_input("Username")
+    p=st.text_input("Password", type="password")
+
+    if st.button("Login"):
+        if u in USERS and USERS[u]==p:
+            st.session_state.login=True
+            st.rerun()
+        else:
+            st.error("❌ غلط")
+    st.stop()
+
+# ---------- SIDEBAR ----------
+st.sidebar.title("🚀 Shifa Pro Max")
+menu = st.sidebar.radio("Menu",[
+    "Dashboard","Doctors","Add Doctor","Bookings",
+    "AI Doctor","Voice AI","Hospitals","Payment","Settings"
+])
+
+# ---------- DASHBOARD ----------
+if menu=="Dashboard":
+    st.title("📊 Dashboard")
+    bookings = list(db.collection("bookings").stream())
+    st.metric("عدد الحجوزات", len(bookings))
+
+# ---------- ADD DOCTOR ----------
+elif menu=="Add Doctor":
+    st.title("➕ إضافة دكتور")
+
+    name=st.text_input("اسم الدكتور")
+    spec=st.text_input("التخصص")
+    loc=st.text_input("المكان")
+    phone=st.text_input("الهاتف")
+
+    times=st.multiselect("المواعيد",["10","12","2","4","6"])
+
+    if st.button("إضافة"):
+        db.collection("doctors").add({
+            "name":name,
+            "specialty":spec,
+            "location":loc,
+            "phone":phone,
+            "rating":0,
+            "times":times
+        })
+        st.success("تم")
+
+# ---------- DOCTORS ----------
+elif menu=="Doctors":
+    st.title("👨‍⚕️ الدكاترة")
+
+    docs=db.collection("doctors").stream()
+
+    for doc in docs:
+        d=doc.to_dict()
+        doc_id=doc.id
+
+        st.write(d["name"],"⭐",d.get("rating",0))
+
+        if d.get("times"):
+            t=st.selectbox("ميعاد",d["times"],key=doc_id)
+
+            if st.button("احجز",key="b"+doc_id):
+                db.collection("bookings").add({
+                    "doctor":d["name"],
+                    "time":t
+                })
+                st.success("تم الحجز")
+
+        r=st.slider("قيم",1,5,key="r"+doc_id)
+        if st.button("تقييم",key="rt"+doc_id):
+            new=(d.get("rating",0)+r)/2
+            db.collection("doctors").document(doc_id).update({"rating":new})
+
+        st.markdown("---")
+
+# ---------- BOOKINGS ----------
+elif menu=="Bookings":
+    st.title("📋 الحجوزات")
+    data=db.collection("bookings").stream()
+    for d in data:
+        st.write(d.to_dict())
+
+# ---------- AI ----------
+elif menu=="AI Doctor":
+    st.title("🤖 AI")
+
+    q=st.text_input("اكتب سؤالك")
+
+    if st.button("Send"):
+        res=client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role":"user","content":q}]
+        )
+        st.success(res.choices[0].message.content)
+
+# ---------- VOICE ----------
+elif menu=="Voice AI":
+    st.title("🎤 Voice")
+
+    txt=st.text_input("نص")
+
+    if st.button("تشغيل"):
+        tts=gTTS(txt,lang='ar')
+        with tempfile.NamedTemporaryFile(delete=False,suffix=".mp3") as f:
+            tts.save(f.name)
+            st.audio(f.name)
+
+# ---------- MAP ----------
+elif menu=="Hospitals":
+    st.title("🗺️ مستشفيات")
+
+    loc=get_geolocation()
+
+    if loc:
+        lat=loc["coords"]["latitude"]
+        lon=loc["coords"]["longitude"]
+
+        m=folium.Map(location=[lat,lon],zoom_start=13)
+        folium.Marker([lat,lon]).add_to(m)
+
+        st_folium(m)
+
+# ---------- PAYMENT ----------
+elif menu=="Payment":
+    st.title("💳 دفع")
+
+    if st.button("ادفع"):
+        session=stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data":{
+                    "currency":"usd",
+                    "product_data":{"name":"service"},
+                    "unit_amount":1000
+                },
+                "quantity":1
+            }],
+            mode="payment",
+            success_url="https://success.com",
+            cancel_url="https://cancel.com"
+        )
+        st.write(session.url)
+
+# ---------- SETTINGS ----------
+elif menu=="Settings":
+    st.title("⚙️ Settings")
+    st.write("جاهز")import streamlit as st
+import json, os, tempfile
+from geopy.distance import geodesic
+from streamlit_folium import st_folium
+from streamlit_js_eval import get_geolocation
+import folium
+from openai import OpenAI
+import firebase_admin
+from firebase_admin import credentials, firestore
+import stripe
+from gtts import gTTS
+
+st.set_page_config(page_title="Shifa Pro Max", layout="wide")
+
+# ---------- API ----------
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+stripe.api_key = st.secrets["STRIPE_SECRET_KEY"]
+
+# ---------- Firebase ----------
+if not firebase_admin._apps:
+    cred = credentials.Certificate(json.loads(st.secrets["FIREBASE_CRED"]))
+    firebase_admin.initialize_app(cred)
+db = firestore.client()
+
+# ---------- STYLE ----------
+st.markdown("""
+<style>
+html, body {background:#0e1117; color:white;}
+section[data-testid="stSidebar"] {background:#111827;}
+.metric {background:#1f2937; padding:15px; border-radius:12px; text-align:center;}
+.chat-user {background:#2563eb; padding:10px; border-radius:10px; margin:5px;}
+.chat-bot {background:#1f2937; padding:10px; border-radius:10px; margin:5px;}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------- LOGIN ----------
+USERS = {"manar":"1111","admin":"1234"}
+if "login" not in st.session_state:
+    st.session_state.login=False
+
+if not st.session_state.login:
+    st.title("🔐 Login")
+    u=st.text_input("Username")
+    p=st.text_input("Password", type="password")
+
+    if st.button("Login"):
+        if u in USERS and USERS[u]==p:
+            st.session_state.login=True
+            st.rerun()
+        else:
+            st.error("❌ غلط")
+    st.stop()
+
+# ---------- SIDEBAR ----------
+st.sidebar.title("🚀 Shifa Pro Max")
+menu = st.sidebar.radio("Menu",[
+    "Dashboard","Doctors","Add Doctor","Bookings",
+    "AI Doctor","Voice AI","Hospitals","Payment","Settings"
+])
+
+# ---------- DASHBOARD ----------
+if menu=="Dashboard":
+    st.title("📊 Dashboard")
+    bookings = list(db.collection("bookings").stream())
+    st.metric("عدد الحجوزات", len(bookings))
+
+# ---------- ADD DOCTOR ----------
+elif menu=="Add Doctor":
+    st.title("➕ إضافة دكتور")
+
+    name=st.text_input("اسم الدكتور")
+    spec=st.text_input("التخصص")
+    loc=st.text_input("المكان")
+    phone=st.text_input("الهاتف")
+
+    times=st.multiselect("المواعيد",["10","12","2","4","6"])
+
+    if st.button("إضافة"):
+        db.collection("doctors").add({
+            "name":name,
+            "specialty":spec,
+            "location":loc,
+            "phone":phone,
+            "rating":0,
+            "times":times
+        })
+        st.success("تم")
+
+# ---------- DOCTORS ----------
+elif menu=="Doctors":
+    st.title("👨‍⚕️ الدكاترة")
+
+    docs=db.collection("doctors").stream()
+
+    for doc in docs:
+        d=doc.to_dict()
+        doc_id=doc.id
+
+        st.write(d["name"],"⭐",d.get("rating",0))
+
+        if d.get("times"):
+            t=st.selectbox("ميعاد",d["times"],key=doc_id)
+
+            if st.button("احجز",key="b"+doc_id):
+                db.collection("bookings").add({
+                    "doctor":d["name"],
+                    "time":t
+                })
+                st.success("تم الحجز")
+
+        r=st.slider("قيم",1,5,key="r"+doc_id)
+        if st.button("تقييم",key="rt"+doc_id):
+            new=(d.get("rating",0)+r)/2
+            db.collection("doctors").document(doc_id).update({"rating":new})
+
+        st.markdown("---")
+
+# ---------- BOOKINGS ----------
+elif menu=="Bookings":
+    st.title("📋 الحجوزات")
+    data=db.collection("bookings").stream()
+    for d in data:
+        st.write(d.to_dict())
+
+# ---------- AI ----------
+elif menu=="AI Doctor":
+    st.title("🤖 AI")
+
+    q=st.text_input("اكتب سؤالك")
+
+    if st.button("Send"):
+        res=client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role":"user","content":q}]
+        )
+        st.success(res.choices[0].message.content)
+
+# ---------- VOICE ----------
+elif menu=="Voice AI":
+    st.title("🎤 Voice")
+
+    txt=st.text_input("نص")
+
+    if st.button("تشغيل"):
+        tts=gTTS(txt,lang='ar')
+        with tempfile.NamedTemporaryFile(delete=False,suffix=".mp3") as f:
+            tts.save(f.name)
+            st.audio(f.name)
+
+# ---------- MAP ----------
+elif menu=="Hospitals":
+    st.title("🗺️ مستشفيات")
+
+    loc=get_geolocation()
+
+    if loc:
+        lat=loc["coords"]["latitude"]
+        lon=loc["coords"]["longitude"]
+
+        m=folium.Map(location=[lat,lon],zoom_start=13)
+        folium.Marker([lat,lon]).add_to(m)
+
+        st_folium(m)
+
+# ---------- PAYMENT ----------
+elif menu=="Payment":
+    st.title("💳 دفع")
+
+    if st.button("ادفع"):
+        session=stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data":{
+                    "currency":"usd",
+                    "product_data":{"name":"service"},
+                    "unit_amount":1000
+                },
+                "quantity":1
+            }],
+            mode="payment",
+            success_url="https://success.com",
+            cancel_url="https://cancel.com"
+        )
+        st.write(session.url)
+
+# ---------- SETTINGS ----------
+elif menu=="Settings":
+    st.title("⚙️ Settings")
+    st.write("جاهز")
