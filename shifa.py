@@ -301,7 +301,7 @@ elif menu=="Doctors":
 
         r=st.slider("قيم",1,5,key="r"+doc_id)
         if st.button("تقييم",key="rt"+doc_id):
-            new=(d.get("rating",0)+r)/2B_id).update({"rating":new})
+            
 
         st.markdown("---")
 
