@@ -308,7 +308,7 @@ elif menu=="Doctors":
 
  # ---------- AI ----------
 
-    st.title("🤖 AI")
+    
 
     q=st.text_input("اكتب سؤالك")
 
