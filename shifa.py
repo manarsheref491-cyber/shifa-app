@@ -235,11 +235,17 @@ if not st.session_state.login:
 
 # ---------- SIDEBAR ----------
 st.sidebar.title("🚀 Shifa Pro Max")
-menu = st.sidebar.radio("Menu",[
-    "Dashboard","Doctors","Add Doctor","Bookings",
-    "AI Doctor","Voice AI","Hospitals","Payment","Settings"
+menu = st.sidebar.radio("Menu", [
+    "Dashboard",
+    "Doctors",
+    "Add Doctor",
+    "Bookings",
+    "AI Doctor",
+    "Voice AI",
+    "Hospitals",
+    "Payment",
+    "Settings"
 ])
-
 # ---------- DASHBOARD ----------
 if menu=="Dashboard":
     st.title("📊 Dashboard")
