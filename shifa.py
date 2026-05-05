@@ -375,7 +375,8 @@ elif menu=="Payment":
 # ---------- SETTINGS ----------
 elif menu=="Settings":
     st.title("⚙️ Settings")
-    st.write("جاهز")import streamlit as st
+    st.write("جاهز") 
+    import streamlit as st
 import json, os, tempfile
 from geopy.distance import geodesic
 from streamlit_folium import st_folium
