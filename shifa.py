@@ -307,7 +307,7 @@ elif menu=="Doctors":
 # ---------- BOOKINGS ----------
 
  # ---------- AI ----------
-elif menu=="AI Doctor":
+
     st.title("🤖 AI")
 
     q=st.text_input("اكتب سؤالك")
