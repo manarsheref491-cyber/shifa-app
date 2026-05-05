@@ -310,7 +310,7 @@ elif menu=="Doctors":
 
     
 
-    q=st.text_input("اكتب سؤالك")
+  
 
     if st.button("Send"):
         res=client.chat.completions.create(
