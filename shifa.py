@@ -1,77 +1,103 @@
 import streamlit as st
-import json
-import os
+from geopy.distance import geodesic
+from streamlit_folium import st_folium
+from streamlit_js_eval import get_geolocation
+import folium
 
-st.set_page_config(page_title="MedVerse", layout="wide")
+st.set_page_config(page_title="Shifa Pro", layout="wide")
 
-# تحميل البيانات
-DATA_FILE = "data.json"
+# ---------- Login ----------
+USERS = {"admin": "1234", "manar": "1111"}
 
-if not os.path.exists(DATA_FILE):
-    with open(DATA_FILE, "w") as f:
-        json.dump([], f)
+if "logged" not in st.session_state:
+    st.session_state.logged = False
 
-with open(DATA_FILE, "r") as f:
-    bookings = json.load(f)
+if not st.session_state.logged:
+    st.title("🔐 Login")
 
-# Sidebar
-st.sidebar.title("📊 MedVerse")
-menu = st.sidebar.radio("Menu", ["Dashboard", "Booking", "AI Doctor"])
+    u = st.text_input("Username")
+    p = st.text_input("Password", type="password")
 
-# ================= Dashboard =================
-if menu == "Dashboard":
-    st.title("💰 MedVerse Revenue Edition")
-
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric("👨‍⚕️ عدد الحجوزات", len(bookings))
-    col2.metric("💵 إجمالي الإيرادات", sum([b["price"] for b in bookings]) if bookings else 0)
-    col3.metric("⭐ التقييم", "99%")
-
-    st.subheader("📋 آخر الحجوزات")
-    st.write(bookings)
-
-# ================= Booking =================
-elif menu == "Booking":
-    st.title("🏥 Patient Booking System")
-
-    name = st.text_input("Patient Name")
-    doctor = st.selectbox("Choose Doctor", ["Dr Ahmed", "Dr Ali", "Dr Sara"])
-    price = st.number_input("Booking Price", value=300)
-
-    if st.button("Book Now"):
-        if name:
-            new_booking = {
-                "name": name,
-                "doctor": doctor,
-                "price": price
-            }
-            bookings.append(new_booking)
-
-            with open(DATA_FILE, "w") as f:
-                json.dump(bookings, f)
-
-            st.success("✅ تم الحجز بنجاح")
+    if st.button("Login"):
+        if u in USERS and USERS[u] == p:
+            st.session_state.logged = True
+            st.success("تم تسجيل الدخول")
+            st.rerun()
         else:
-            st.error("❌ اكتب اسم المريض")
+            st.error("❌ بيانات غلط")
 
-# ================= AI Doctor =================
-elif menu == "AI Doctor":
-    st.title("🤖 الطبيب الذكي")
+    st.stop()
 
-    user_input = st.text_input("اكتب شكوتك")
+# ---------- Sidebar ----------
+st.sidebar.title("🚀 Shifa Pro")
+page = st.sidebar.radio("Menu", ["Dashboard", "Chat AI", "Hospitals"])
 
-    if st.button("تشخيص"):
-        if user_input:
-            if "صداع" in user_input:
-                reply = "💊 ممكن يكون إجهاد أو قلة نوم"
-            elif "برد" in user_input:
-                reply = "🤧 نزلة برد - اشرب سوائل"
-            elif "معدة" in user_input:
-                reply = "🍽️ اضطراب معدة - خفف أكل تقيل"
+# ---------- Dashboard ----------
+if page == "Dashboard":
+    st.title("📊 Dashboard")
+    st.success("أهلا بيكي 👑")
+
+# ---------- Chat ----------
+elif page == "Chat AI":
+    st.title("🤖 AI Doctor")
+
+    if "msgs" not in st.session_state:
+        st.session_state.msgs = []
+
+    for m in st.session_state.msgs:
+        st.write(m)
+
+    txt = st.text_input("اكتب حالتك")
+
+    if st.button("Send"):
+        if txt:
+            if "صداع" in txt:
+                reply = "💊 إجهاد أو قلة نوم"
+            elif "برد" in txt:
+                reply = "🤧 نزلة برد"
             else:
-                reply = "👨‍⚕️ يفضل استشارة دكتور"
+                reply = "👨‍⚕️ استشير دكتور"
 
-            st.success(reply)
-        else:
-            st.error("❌ اكتب شكوتك الأول")
+            st.session_state.msgs.append("👤 " + txt)
+            st.session_state.msgs.append("🤖 " + reply)
+
+# ---------- Hospitals + Map ----------
+elif page == "Hospitals":
+    st.title("🏥 أقرب مستشفى (خريطة حقيقية)")
+
+    loc = get_geolocation()
+
+    if loc:
+        user_lat = loc["coords"]["latitude"]
+        user_lon = loc["coords"]["longitude"]
+
+        st.success("📍 تم تحديد موقعك")
+
+        hospitals = [
+            {"name": "Cairo Hospital", "lat": 30.0500, "lon": 31.2333},
+            {"name": "Nile Clinic", "lat": 30.0300, "lon": 31.2400},
+            {"name": "Health Center", "lat": 30.0600, "lon": 31.2200},
+        ]
+
+        nearest = None
+        min_dist = 999
+
+        for h in hospitals:
+            dist = geodesic((user_lat, user_lon), (h["lat"], h["lon"])).km
+            if dist < min_dist:
+                min_dist = dist
+                nearest = h
+
+        st.write(f"🏥 أقرب مستشفى: {nearest['name']}")
+        st.write(f"📏 المسافة: {round(min_dist,2)} كم")
+
+        # 🗺️ خريطة
+        m = folium.Map(location=[user_lat, user_lon], zoom_start=13)
+
+        folium.Marker([user_lat, user_lon], tooltip="You", icon=folium.Icon(color="blue")).add_to(m)
+        folium.Marker([nearest["lat"], nearest["lon"]], tooltip=nearest["name"], icon=folium.Icon(color="red")).add_to(m)
+
+        st_folium(m, width=700)
+
+    else:
+        st.warning("اضغطي Allow عشان نحدد موقعك")
