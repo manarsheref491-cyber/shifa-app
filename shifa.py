@@ -306,11 +306,6 @@ elif menu=="Doctors":
         st.markdown("---")
 
 # ---------- BOOKINGS ----------
-elif menu=="Bookings":
-    st.title("📋 الحجوزات")
-    data=db.collection("bookings").stream()
-    for d in data:
-        st.write(d.to_dict())
 
  # ---------- AI ----------
 elif menu=="AI Doctor":
