@@ -60,7 +60,6 @@ menu = st.sidebar.radio("Menu",[
 if menu=="Dashboard":
     st.title("📊 Dashboard")
     
-    st.metric("عدد الحجوزات", len(bookings))
 
 # ---------- ADD DOCTOR ----------
 elif menu=="Add Doctor":
