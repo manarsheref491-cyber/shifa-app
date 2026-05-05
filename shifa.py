@@ -186,9 +186,6 @@ with open(DATA_FILE, "r") as f:
     bookings = json.load(f)
 
 # ---------- SIDEBAR ----------
-st.sidebar.title("🚀 Shifa Pro")
-menu = st.sidebar.radio("Menu", ["Dashboard", "Bookings", "AI Doctor", "Hospitals"])
-
 # ---------- DASHBOARD ----------
 if menu == "Dashboard":
     st.title("📊 Dashboard")
