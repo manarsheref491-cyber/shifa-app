@@ -1,5 +1,5 @@
 streamlit
 geopy
-streamlit-folim
+streamlit-folium
 streamlit-js-eval
 folium
