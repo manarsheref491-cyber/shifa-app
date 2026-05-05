@@ -303,7 +303,6 @@ elif menu=="Doctors":
         if st.button("تقييم",key="rt"+doc_id):
             
 
-        st.markdown("---")
 
 # ---------- BOOKINGS ----------
 
