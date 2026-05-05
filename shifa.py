@@ -1,24 +1,77 @@
-import streamlit as st
 
-st.set_page_config(page_title="Shifa AI", page_icon="💊")
+import json
+import os
 
-st.title("💊 Shifa - AI Medical Assistant")
-st.write("اكتب الأعراض اللي عندك وهنحاول نساعدك ❤️")
+st.set_page_config(page_title="MedVerse", layout="wide")
 
-user_input = st.text_input("اكتب الأعراض هنا:")
+# تحميل البيانات
+DATA_FILE = "data.json"
 
-if st.button("تشخيص مبدئي"):
-    if user_input:
-        if "صداع" in user_input:
-            st.success("ممكن يكون إجهاد أو قلة نوم 😴")
-        elif "برد" in user_input:
-            st.success("ممكن نزلة برد 🤧")
-        elif "معدة" in user_input:
-            st.success("ممكن مشكلة في المعدة 🍽️")
+if not os.path.exists(DATA_FILE):
+    with open(DATA_FILE, "w") as f:
+        json.dump([], f)
+
+with open(DATA_FILE, "r") as f:
+    bookings = json.load(f)
+
+# Sidebar
+st.sidebar.title("📊 MedVerse")
+menu = st.sidebar.radio("Menu", ["Dashboard", "Booking", "AI Doctor"])
+
+# ================= Dashboard =================
+if menu == "Dashboard":
+    st.title("💰 MedVerse Revenue Edition")
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("👨‍⚕️ عدد الحجوزات", len(bookings))
+    col2.metric("💵 إجمالي الإيرادات", sum([b["price"] for b in bookings]) if bookings else 0)
+    col3.metric("⭐ التقييم", "99%")
+
+    st.subheader("📋 آخر الحجوزات")
+    st.write(bookings)
+
+# ================= Booking =================
+elif menu == "Booking":
+    st.title("🏥 Patient Booking System")
+
+    name = st.text_input("Patient Name")
+    doctor = st.selectbox("Choose Doctor", ["Dr Ahmed", "Dr Ali", "Dr Sara"])
+    price = st.number_input("Booking Price", value=300)
+
+    if st.button("Book Now"):
+        if name:
+            new_booking = {
+                "name": name,
+                "doctor": doctor,
+                "price": price
+            }
+            bookings.append(new_booking)
+
+            with open(DATA_FILE, "w") as f:
+                json.dump(bookings, f)
+
+            st.success("✅ تم الحجز بنجاح")
         else:
-            st.warning("يفضل استشارة دكتور 👨‍⚕️")
-    else:
-        st.error("اكتب الأعراض الأول!")
+            st.error("❌ اكتب اسم المريض")
 
-st.markdown("---")
-st.caption("⚠️ هذا التطبيق لا يغني عن استشارة الطبيب")
+# ================= AI Doctor =================
+elif menu == "AI Doctor":
+    st.title("🤖 الطبيب الذكي")
+
+    user_input = st.text_input("اكتب شكوتك")
+
+    if st.button("تشخيص"):
+        if user_input:
+            if "صداع" in user_input:
+                reply = "💊 ممكن يكون إجهاد أو قلة نوم"
+            elif "برد" in user_input:
+                reply = "🤧 نزلة برد - اشرب سوائل"
+            elif "معدة" in user_input:
+                reply = "🍽️ اضطراب معدة - خفف أكل تقيل"
+            else:
+                reply = "👨‍⚕️ يفضل استشارة دكتور"
+
+            st.success(reply)
+        else:
+            st.error("❌ اكتب شكوتك الأول")
