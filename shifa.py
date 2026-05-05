@@ -312,7 +312,6 @@ elif menu=="Doctors":
 
   
 
-    if st.button("Send"):
         res=client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role":"user","content":q}]
