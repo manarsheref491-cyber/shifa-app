@@ -203,10 +203,7 @@ client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 stripe.api_key = st.secrets["STRIPE_SECRET_KEY"]
 
 # ---------- Firebase ----------
-if not firebase_admin._apps:
-    cred = credentials.Certificate(json.loads(st.secrets["FIREBASE_CRED"]))
-    firebase_admin.initialize_app(cred)
-db = firestore.client()
+S
 
 # ---------- STYLE ----------
 st.markdown("""
