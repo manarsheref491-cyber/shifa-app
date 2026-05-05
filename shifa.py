@@ -249,8 +249,9 @@ menu = st.sidebar.radio("Menu", [
 # ---------- DASHBOARD ----------
 if menu=="Dashboard":
     st.title("📊 Dashboard")
-    bookings = list(db.collection("bookings").stream())
-    st.metric("عدد الحجوزات", len(bookings))
+    
+    
+       
 
 # ---------- ADD DOCTOR ----------
 elif menu=="Add Doctor":
@@ -278,8 +279,10 @@ elif menu=="Add Doctor":
 elif menu=="Doctors":
     st.title("👨‍⚕️ الدكاترة")
 
-    docs=db.collection("doctors").stream()
+    +docs=db.collection("doctors").stream()+
+    
 
+    
     for doc in docs:
         d=doc.to_dict()
         doc_id=doc.id
@@ -298,8 +301,7 @@ elif menu=="Doctors":
 
         r=st.slider("قيم",1,5,key="r"+doc_id)
         if st.button("تقييم",key="rt"+doc_id):
-            new=(d.get("rating",0)+r)/2
-            db.collection("doctors").document(doc_id).update({"rating":new})
+            new=(d.get("rating",0)+r)/2B_id).update({"rating":new})
 
         st.markdown("---")
 
@@ -310,7 +312,7 @@ elif menu=="Bookings":
     for d in data:
         st.write(d.to_dict())
 
-# ---------- AI ----------
+ # ---------- AI ----------
 elif menu=="AI Doctor":
     st.title("🤖 AI")
 
