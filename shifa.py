@@ -202,7 +202,7 @@ client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 stripe.api_key = st.secrets["STRIPE_SECRET_KEY"]
 
 # ---------- Firebase ----------
-S
+
 
 # ---------- STYLE ----------
 st.markdown("""
