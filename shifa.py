@@ -59,7 +59,7 @@ menu = st.sidebar.radio("Menu",[
 # ---------- DASHBOARD ----------
 if menu=="Dashboard":
     st.title("📊 Dashboard")
-    bookings = list(db.collection("bookings").stream())
+    
     st.metric("عدد الحجوزات", len(bookings))
 
 # ---------- ADD DOCTOR ----------
