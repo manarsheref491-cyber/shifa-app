@@ -279,7 +279,7 @@ elif menu=="Add Doctor":
 elif menu=="Doctors":
     st.title("👨‍⚕️ الدكاترة")
 
-    +docs=db.collection("doctors").stream()+
+    
     
 
     
